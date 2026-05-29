@@ -62,7 +62,7 @@ export default function StudentDashboard() {
     const { error } = await supabase.from('test_participants').insert({
       test_id: testId,
       student_id: profile.id,
-      status: 'invited',
+      status: test.is_open ? 'accepted' : 'invited',
     });
 
     if (error) {
@@ -79,8 +79,9 @@ export default function StudentDashboard() {
 
   async function startTest(participation) {
     if (!participation.test) return;
-    if (participation.status !== 'accepted' && participation.status !== 'invited') {
-      setJoinError("Siz bu testga qo'shila olmaysiz. O'qituvchi ruxsat bermagan.");
+
+    if (participation.status === 'rejected') {
+      setJoinError("Siz bu testga qo'shila olmaysiz. O'qituvchi sizni rad etdi.");
       return;
     }
 
@@ -89,8 +90,12 @@ export default function StudentDashboard() {
       return;
     }
 
+    if (participation.status === 'completed') {
+      setJoinError("Siz bu testni allaqachon topshirgansiz.");
+      return;
+    }
+
     await supabase.from('test_participants').update({
-      status: 'accepted',
       started_at: new Date().toISOString(),
     }).eq('id', participation.id);
 
