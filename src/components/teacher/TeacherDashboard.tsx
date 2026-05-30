@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase, type Test, type TestParticipant } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { Plus, BookOpen, Users, Clock, CheckCircle, Play, Eye, Trash2, ChevronRight } from 'lucide-react';
 import TestForm from './TestForm';
@@ -7,12 +7,12 @@ import TestDetail from './TestDetail';
 
 export default function TeacherDashboard() {
   const { profile, signOut } = useAuth();
-  const [tests, setTests] = useState([]);
+  const [tests, setTests] = useState<Test[]>([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
-  const [editingTest, setEditingTest] = useState(null);
-  const [selectedTest, setSelectedTest] = useState(null);
-  const [participantCounts, setParticipantCounts] = useState({});
+  const [editingTest, setEditingTest] = useState<Test | null>(null);
+  const [selectedTest, setSelectedTest] = useState<Test | null>(null);
+  const [participantCounts, setParticipantCounts] = useState<Record<string, number>>({});
 
   useEffect(() => {
     fetchTests();
@@ -22,11 +22,11 @@ export default function TeacherDashboard() {
     const { data } = await supabase
       .from('tests')
       .select('*')
-      .eq('teacher_id', profile.id)
+      .eq('teacher_id', profile!.id)
       .order('created_at', { ascending: false });
     if (data) {
       setTests(data);
-      const counts = {};
+      const counts: Record<string, number> = {};
       for (const test of data) {
         const { count } = await supabase
           .from('test_participants')
@@ -39,13 +39,13 @@ export default function TeacherDashboard() {
     setLoading(false);
   }
 
-  async function deleteTest(testId) {
+  async function deleteTest(testId: string) {
     if (!confirm("Haqiqatan ham bu testni o'chirmoqchimisiz?")) return;
     await supabase.from('tests').delete().eq('id', testId);
     fetchTests();
   }
 
-  async function toggleTestStatus(test) {
+  async function toggleTestStatus(test: Test) {
     const newStatus = test.status === 'draft' ? 'active' : test.status === 'active' ? 'completed' : 'draft';
     await supabase.from('tests').update({ status: newStatus }).eq('id', test.id);
     fetchTests();
@@ -64,6 +64,7 @@ export default function TeacherDashboard() {
 
   return (
     <div className="min-h-screen bg-slate-50">
+      {/* Header */}
       <header className="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -90,6 +91,7 @@ export default function TeacherDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Stats */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
             <div className="flex items-center gap-3">
@@ -137,6 +139,7 @@ export default function TeacherDashboard() {
           </div>
         </div>
 
+        {/* Tests */}
         <div className="flex items-center justify-between mb-6">
           <h2 className="text-xl font-bold text-slate-900">Mening testlarim</h2>
           <button
@@ -233,6 +236,7 @@ export default function TeacherDashboard() {
         )}
       </main>
 
+      {/* Test Form Modal */}
       {showForm && (
         <TestForm
           test={editingTest}

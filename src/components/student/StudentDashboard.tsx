@@ -1,16 +1,16 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase, type Test, type TestParticipant } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { BookOpen, Users, Clock, Play, GraduationCap, AlertTriangle, CheckCircle, BarChart3 } from 'lucide-react';
 import TakeTest from './TakeTest';
 
 export default function StudentDashboard() {
   const { profile, signOut } = useAuth();
-  const [activeTests, setActiveTests] = useState([]);
-  const [myParticipations, setMyParticipations] = useState([]);
+  const [activeTests, setActiveTests] = useState<(Test & { teacher?: { full_name: string } })[]>([]);
+  const [myParticipations, setMyParticipations] = useState<(TestParticipant & { test?: Test })[]>([]);
   const [loading, setLoading] = useState(true);
-  const [joinError, setJoinError] = useState(null);
-  const [activeTest, setActiveTest] = useState(null);
+  const [joinError, setJoinError] = useState<string | null>(null);
+  const [activeTest, setActiveTest] = useState<Test | null>(null);
 
   useEffect(() => {
     fetchData();
@@ -19,14 +19,14 @@ export default function StudentDashboard() {
   async function fetchData() {
     const [testsRes, partsRes] = await Promise.all([
       supabase.from('tests').select('*, teacher:profiles!tests_teacher_id_fkey(full_name)').eq('status', 'active').order('created_at', { ascending: false }),
-      supabase.from('test_participants').select('*, test:tests(*)').eq('student_id', profile.id).order('created_at', { ascending: false }),
+      supabase.from('test_participants').select('*, test:tests(*)').eq('student_id', profile!.id).order('created_at', { ascending: false }),
     ]);
-    if (testsRes.data) setActiveTests(testsRes.data);
-    if (partsRes.data) setMyParticipations(partsRes.data);
+    if (testsRes.data) setActiveTests(testsRes.data as any);
+    if (partsRes.data) setMyParticipations(partsRes.data as any);
     setLoading(false);
   }
 
-  async function joinTest(testId) {
+  async function joinTest(testId: string) {
     setJoinError(null);
     const test = activeTests.find(t => t.id === testId);
     if (!test) return;
@@ -50,7 +50,7 @@ export default function StudentDashboard() {
         .from('test_participants')
         .select('*')
         .eq('test_id', testId)
-        .eq('student_id', profile.id)
+        .eq('student_id', profile!.id)
         .maybeSingle();
 
       if (!participant) {
@@ -61,8 +61,8 @@ export default function StudentDashboard() {
 
     const { error } = await supabase.from('test_participants').insert({
       test_id: testId,
-      student_id: profile.id,
-      status: test.is_open ? 'accepted' : 'invited',
+      student_id: profile!.id,
+      status: 'invited',
     });
 
     if (error) {
@@ -77,11 +77,10 @@ export default function StudentDashboard() {
     fetchData();
   }
 
-  async function startTest(participation) {
+  async function startTest(participation: TestParticipant & { test?: Test }) {
     if (!participation.test) return;
-
-    if (participation.status === 'rejected') {
-      setJoinError("Siz bu testga qo'shila olmaysiz. O'qituvchi sizni rad etdi.");
+    if (participation.status !== 'accepted' && participation.status !== 'invited') {
+      setJoinError("Siz bu testga qo'shila olmaysiz. O'qituvchi ruxsat bermagan.");
       return;
     }
 
@@ -90,12 +89,8 @@ export default function StudentDashboard() {
       return;
     }
 
-    if (participation.status === 'completed') {
-      setJoinError("Siz bu testni allaqachon topshirgansiz.");
-      return;
-    }
-
     await supabase.from('test_participants').update({
+      status: 'accepted',
       started_at: new Date().toISOString(),
     }).eq('id', participation.id);
 
@@ -107,6 +102,7 @@ export default function StudentDashboard() {
   }
 
   const myTestIds = new Set(myParticipations.map(p => p.test_id));
+  const availableTests = activeTests.filter(t => !myTestIds.has(t.id) || myParticipations.find(p => p.test_id === t.id && (p.status === 'accepted' || p.status === 'invited')));
   const completedTests = myParticipations.filter(p => p.status === 'completed');
   const pendingTests = myParticipations.filter(p => p.status === 'invited' || p.status === 'accepted');
 
@@ -138,6 +134,7 @@ export default function StudentDashboard() {
       </header>
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        {/* Error Toast */}
         {joinError && (
           <div className="mb-6 bg-red-50 border border-red-100 rounded-2xl p-4 flex items-center gap-3 animate-in">
             <AlertTriangle className="w-5 h-5 text-red-500 shrink-0" />
@@ -146,6 +143,7 @@ export default function StudentDashboard() {
           </div>
         )}
 
+        {/* Stats */}
         <div className="grid grid-cols-3 gap-4 mb-8">
           <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm">
             <div className="flex items-center gap-3">
@@ -188,6 +186,7 @@ export default function StudentDashboard() {
           <div className="text-center py-12 text-slate-400">Yuklanmoqda...</div>
         ) : (
           <div className="grid lg:grid-cols-2 gap-8">
+            {/* Available Tests */}
             <div>
               <h2 className="text-xl font-bold text-slate-900 mb-4">Mavjud testlar</h2>
               {activeTests.filter(t => !myTestIds.has(t.id)).length === 0 ? (
@@ -208,8 +207,8 @@ export default function StudentDashboard() {
                             {test.is_open && <span className="bg-blue-50 text-blue-700 px-2 py-0.5 rounded-md font-semibold">Ochiq</span>}
                             {!test.is_open && <span className="bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md font-semibold">Cheklangan</span>}
                           </div>
-                          {test.teacher?.full_name && (
-                            <p className="text-xs text-slate-400 mt-1">O'qituvchi: {test.teacher.full_name}</p>
+                          {(test as any).teacher?.full_name && (
+                            <p className="text-xs text-slate-400 mt-1">O'qituvchi: {(test as any).teacher.full_name}</p>
                           )}
                         </div>
                         <button
@@ -226,6 +225,7 @@ export default function StudentDashboard() {
               )}
             </div>
 
+            {/* My Tests */}
             <div>
               <h2 className="text-xl font-bold text-slate-900 mb-4">Mening testlarim</h2>
               {myParticipations.length === 0 ? (

@@ -1,14 +1,22 @@
 import { useState, useEffect } from 'react';
-import { supabase } from '../../lib/supabase';
-import { ArrowLeft, Users, Plus, UserPlus, X, Check, Clock, BookOpen, BarChart3 } from 'lucide-react';
+import { supabase, type Test, type Question, type TestParticipant, type Profile } from '../../lib/supabase';
+import { useAuth } from '../../hooks/useAuth';
+import { ArrowLeft, Users, Plus, UserPlus, X, Check, AlertTriangle, Clock, BookOpen, BarChart3 } from 'lucide-react';
 
-export default function TestDetail({ test, onBack }) {
-  const [questions, setQuestions] = useState([]);
-  const [participants, setParticipants] = useState([]);
+type Props = {
+  test: Test;
+  onBack: () => void;
+};
+
+export default function TestDetail({ test, onBack }: Props) {
+  const { profile } = useAuth();
+  const [questions, setQuestions] = useState<Question[]>([]);
+  const [participants, setParticipants] = useState<(TestParticipant & { student?: Profile })[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAddStudent, setShowAddStudent] = useState(false);
-  const [students, setStudents] = useState([]);
+  const [students, setStudents] = useState<Profile[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [showAddQuestion, setShowAddQuestion] = useState(false);
 
   useEffect(() => {
     fetchDetails();
@@ -20,7 +28,7 @@ export default function TestDetail({ test, onBack }) {
       supabase.from('test_participants').select('*, student:profiles(*)').eq('test_id', test.id),
     ]);
     if (qRes.data) setQuestions(qRes.data);
-    if (pRes.data) setParticipants(pRes.data);
+    if (pRes.data) setParticipants(pRes.data as any);
     setLoading(false);
   }
 
@@ -33,7 +41,7 @@ export default function TestDetail({ test, onBack }) {
     if (data) setStudents(data);
   }
 
-  async function addParticipant(studentId) {
+  async function addParticipant(studentId: string) {
     const { error } = await supabase.from('test_participants').insert({
       test_id: test.id,
       student_id: studentId,
@@ -45,12 +53,12 @@ export default function TestDetail({ test, onBack }) {
     }
   }
 
-  async function removeParticipant(participantId) {
+  async function removeParticipant(participantId: string) {
     await supabase.from('test_participants').delete().eq('id', participantId);
     fetchDetails();
   }
 
-  async function updateParticipantStatus(participantId, status) {
+  async function updateParticipantStatus(participantId: string, status: string) {
     await supabase.from('test_participants').update({ status }).eq('id', participantId);
     fetchDetails();
   }
@@ -91,6 +99,7 @@ export default function TestDetail({ test, onBack }) {
           <div className="text-center py-12 text-slate-400">Yuklanmoqda...</div>
         ) : (
           <div className="grid lg:grid-cols-3 gap-6">
+            {/* Stats */}
             <div className="lg:col-span-3 grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="bg-white rounded-2xl p-4 border border-slate-100 shadow-sm">
                 <div className="flex items-center gap-2 mb-1">
@@ -122,6 +131,7 @@ export default function TestDetail({ test, onBack }) {
               </div>
             </div>
 
+            {/* Participants */}
             <div className="lg:col-span-2">
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm">
                 <div className="flex items-center justify-between p-5 border-b border-slate-100">
@@ -150,7 +160,7 @@ export default function TestDetail({ test, onBack }) {
                             </span>
                           </div>
                           <div>
-                            <p className="font-medium text-slate-900 text-sm">{p.student?.full_name || "Noma'lum"}</p>
+                            <p className="font-medium text-slate-900 text-sm">{p.student?.full_name || 'Noma\'lum'}</p>
                             <div className="flex items-center gap-2 mt-0.5">
                               <span className={`text-xs font-semibold px-2 py-0.5 rounded-md ${
                                 p.status === 'completed' ? 'bg-emerald-50 text-emerald-700' :
@@ -192,6 +202,7 @@ export default function TestDetail({ test, onBack }) {
               </div>
             </div>
 
+            {/* Questions */}
             <div>
               <div className="bg-white rounded-2xl border border-slate-100 shadow-sm">
                 <div className="p-5 border-b border-slate-100">
@@ -216,7 +227,7 @@ export default function TestDetail({ test, onBack }) {
                             <div key={letter} className={`text-xs px-2 py-1 rounded-md ${
                               q.correct_answer === letter ? 'bg-emerald-50 text-emerald-700 font-semibold' : 'text-slate-500'
                             }`}>
-                              {letter}. {q[`option_${letter.toLowerCase()}`]}
+                              {letter}. {q[`option_${letter.toLowerCase()}` as keyof Question] as string}
                               {q.correct_answer === letter && <Check className="w-3 h-3 inline ml-1" />}
                             </div>
                           ))}
@@ -231,6 +242,7 @@ export default function TestDetail({ test, onBack }) {
         )}
       </main>
 
+      {/* Add Student Modal */}
       {showAddStudent && (
         <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl">

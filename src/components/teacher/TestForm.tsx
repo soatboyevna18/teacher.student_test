@@ -1,19 +1,35 @@
 import { useState } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase, type Test, type Question } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
 import { X, Plus, Trash2, Save, GripVertical } from 'lucide-react';
 
-export default function TestForm({ test, onClose, onSaved }) {
+type Props = {
+  test: Test | null;
+  onClose: () => void;
+  onSaved: () => void;
+};
+
+type QuestionInput = {
+  question_text: string;
+  option_a: string;
+  option_b: string;
+  option_c: string;
+  option_d: string;
+  correct_answer: 'A' | 'B' | 'C' | 'D';
+  points: number;
+};
+
+export default function TestForm({ test, onClose, onSaved }: Props) {
   const { profile } = useAuth();
   const [title, setTitle] = useState(test?.title ?? '');
   const [description, setDescription] = useState(test?.description ?? '');
   const [isOpen, setIsOpen] = useState(test?.is_open ?? false);
   const [timeLimit, setTimeLimit] = useState(test?.time_limit_minutes ?? 30);
-  const [questions, setQuestions] = useState([
+  const [questions, setQuestions] = useState<QuestionInput[]>([
     { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: 'A', points: 1 },
   ]);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState<string | null>(null);
 
   const isEditing = !!test;
 
@@ -21,12 +37,12 @@ export default function TestForm({ test, onClose, onSaved }) {
     setQuestions([...questions, { question_text: '', option_a: '', option_b: '', option_c: '', option_d: '', correct_answer: 'A', points: 1 }]);
   }
 
-  function removeQuestion(index) {
+  function removeQuestion(index: number) {
     if (questions.length <= 1) return;
     setQuestions(questions.filter((_, i) => i !== index));
   }
 
-  function updateQuestion(index, field, value) {
+  function updateQuestion(index: number, field: keyof QuestionInput, value: string | number) {
     const updated = [...questions];
     updated[index] = { ...updated[index], [field]: value };
     setQuestions(updated);
@@ -51,7 +67,7 @@ export default function TestForm({ test, onClose, onSaved }) {
       } else {
         const { data, error: insertError } = await supabase.from('tests').insert({
           title, description, is_open: isOpen, time_limit_minutes: timeLimit,
-          teacher_id: profile.id, status: 'draft',
+          teacher_id: profile!.id, status: 'draft',
         }).select().single();
         if (insertError) throw insertError;
         testId = data.id;
@@ -74,7 +90,7 @@ export default function TestForm({ test, onClose, onSaved }) {
       }
 
       onSaved();
-    } catch (err) {
+    } catch (err: any) {
       setError(err.message || 'Xatolik yuz berdi');
     } finally {
       setSaving(false);
@@ -94,6 +110,7 @@ export default function TestForm({ test, onClose, onSaved }) {
         </div>
 
         <div className="p-6 space-y-6">
+          {/* Test Info */}
           <div className="space-y-4">
             <div>
               <label className="block text-sm font-medium text-slate-700 mb-1.5">Sarlavha</label>
@@ -139,6 +156,7 @@ export default function TestForm({ test, onClose, onSaved }) {
             </div>
           </div>
 
+          {/* Questions */}
           {!isEditing && (
             <div>
               <div className="flex items-center justify-between mb-4">
@@ -179,7 +197,7 @@ export default function TestForm({ test, onClose, onSaved }) {
 
                     <div className="grid grid-cols-2 gap-2 mb-3">
                       {['A', 'B', 'C', 'D'].map(letter => {
-                        const key = `option_${letter.toLowerCase()}`;
+                        const key = `option_${letter.toLowerCase()}` as keyof QuestionInput;
                         return (
                           <div key={letter} className="flex items-center gap-2">
                             <button
@@ -194,7 +212,7 @@ export default function TestForm({ test, onClose, onSaved }) {
                               {letter}
                             </button>
                             <input
-                              value={q[key]}
+                              value={q[key] as string}
                               onChange={(e) => updateQuestion(index, key, e.target.value)}
                               className="flex-1 px-3 py-1.5 border border-slate-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 outline-none bg-white"
                               placeholder={`${letter} variant`}

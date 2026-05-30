@@ -1,12 +1,23 @@
 import { useState, useEffect, createContext, useContext } from 'react';
-import { supabase } from '../lib/supabase';
+import { supabase, type Profile } from '../lib/supabase';
+import type { User, Session } from '@supabase/supabase-js';
 
-const AuthContext = createContext(undefined);
+type AuthContextType = {
+  user: User | null;
+  session: Session | null;
+  profile: Profile | null;
+  loading: boolean;
+  signUp: (email: string, password: string, fullName: string, role: 'teacher' | 'student') => Promise<{ error: string | null }>;
+  signIn: (email: string, password: string) => Promise<{ error: string | null }>;
+  signOut: () => Promise<void>;
+};
 
-export function AuthProvider({ children }) {
-  const [user, setUser] = useState(null);
-  const [session, setSession] = useState(null);
-  const [profile, setProfile] = useState(null);
+const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+export function AuthProvider({ children }: { children: React.ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [session, setSession] = useState<Session | null>(null);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -34,7 +45,7 @@ export function AuthProvider({ children }) {
     return () => subscription.unsubscribe();
   }, []);
 
-  async function fetchProfile(userId) {
+  async function fetchProfile(userId: string) {
     const { data } = await supabase
       .from('profiles')
       .select('*')
@@ -44,7 +55,7 @@ export function AuthProvider({ children }) {
     setLoading(false);
   }
 
-  async function signUp(email, password, fullName, role) {
+  async function signUp(email: string, password: string, fullName: string, role: 'teacher' | 'student') {
     const { error } = await supabase.auth.signUp({
       email,
       password,
@@ -55,7 +66,7 @@ export function AuthProvider({ children }) {
     return { error: error?.message ?? null };
   }
 
-  async function signIn(email, password) {
+  async function signIn(email: string, password: string) {
     const { error } = await supabase.auth.signInWithPassword({ email, password });
     return { error: error?.message ?? null };
   }

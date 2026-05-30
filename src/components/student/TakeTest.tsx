@@ -1,13 +1,18 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '../../lib/supabase';
+import { supabase, type Test, type Question, type TestAnswer } from '../../lib/supabase';
 import { useAuth } from '../../hooks/useAuth';
-import { Clock, ChevronRight, ChevronLeft, CheckCircle } from 'lucide-react';
+import { Clock, ChevronRight, ChevronLeft, CheckCircle, AlertTriangle, ArrowRight } from 'lucide-react';
 
-export default function TakeTest({ test, onComplete }) {
+type Props = {
+  test: Test;
+  onComplete: () => void;
+};
+
+export default function TakeTest({ test, onComplete }: Props) {
   const { profile } = useAuth();
-  const [questions, setQuestions] = useState([]);
+  const [questions, setQuestions] = useState<Question[]>([]);
   const [currentQ, setCurrentQ] = useState(0);
-  const [answers, setAnswers] = useState({});
+  const [answers, setAnswers] = useState<Record<string, 'A' | 'B' | 'C' | 'D'>>({});
   const [timeLeft, setTimeLeft] = useState(test.time_limit_minutes * 60);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
@@ -32,6 +37,21 @@ export default function TakeTest({ test, onComplete }) {
     setLoading(false);
   };
 
+  useEffect(() => {
+    if (finished || loading) return;
+    const timer = setInterval(() => {
+      setTimeLeft(prev => {
+        if (prev <= 1) {
+          clearInterval(timer);
+          handleSubmit();
+          return 0;
+        }
+        return prev - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [finished, loading]);
+
   const handleSubmit = useCallback(async () => {
     if (submitting || finished) return;
     setSubmitting(true);
@@ -41,18 +61,20 @@ export default function TakeTest({ test, onComplete }) {
         .from('test_participants')
         .select('id')
         .eq('test_id', test.id)
-        .eq('student_id', profile.id)
+        .eq('student_id', profile!.id)
         .maybeSingle();
 
       if (!participant) { setSubmitting(false); return; }
 
+      let correctCount = 0;
       let earnedPoints = 0;
-      const answerInserts = [];
+      const answerInserts: Omit<TestAnswer, 'id'>[] = [];
 
       for (const q of questions) {
         const selected = answers[q.id];
         const isCorrect = selected === q.correct_answer;
         if (isCorrect) {
+          correctCount++;
           earnedPoints += q.points;
         }
         if (selected) {
@@ -85,26 +107,11 @@ export default function TakeTest({ test, onComplete }) {
     }
   }, [answers, questions, test.id, profile, submitting, finished]);
 
-  useEffect(() => {
-    if (finished || loading) return;
-    const timer = setInterval(() => {
-      setTimeLeft(prev => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          handleSubmit();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(timer);
-  }, [finished, loading, handleSubmit]);
-
-  function selectAnswer(questionId, answer) {
+  function selectAnswer(questionId: string, answer: 'A' | 'B' | 'C' | 'D') {
     setAnswers(prev => ({ ...prev, [questionId]: answer }));
   }
 
-  const formatTime = (seconds) => {
+  const formatTime = (seconds: number) => {
     const m = Math.floor(seconds / 60);
     const s = seconds % 60;
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
@@ -193,8 +200,8 @@ export default function TakeTest({ test, onComplete }) {
           <h2 className="text-lg font-semibold text-slate-900 mb-6">{question.question_text}</h2>
 
           <div className="space-y-3">
-            {['A', 'B', 'C', 'D'].map(letter => {
-              const optionText = question[`option_${letter.toLowerCase()}`];
+            {(['A', 'B', 'C', 'D'] as const).map(letter => {
+              const optionText = question[`option_${letter.toLowerCase()}` as keyof Question] as string;
               const isSelected = answers[question.id] === letter;
               return (
                 <button
